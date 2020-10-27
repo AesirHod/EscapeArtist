@@ -183,7 +183,7 @@ bool MoviePlayer::Initialize()
 	hr = m_pDS->CreateSoundBuffer(&dsbd, &m_pDSBPrimary, NULL);
 	if (FAILED(hr))
 	{
-		OutputDebugString("Couldn't create the primry sound buffer.\n");
+		OutputDebugString("Couldn't create the primary sound buffer.\n");
 		return false;
 	}
 
@@ -325,12 +325,14 @@ bool MoviePlayer::LoadMovie()
 	hr = m_pDS->CreateSoundBuffer(&dsbd, &m_pDSBSecondary, NULL);
 	if (FAILED(hr))
 	{
+		OutputDebugString("Couldn't create the secondary sound buffer.\n");
 		return false;
 	}
 
 	hr = m_pDSBSecondary->SetCurrentPosition(0);
 	if (FAILED(hr))
 	{
+		OutputDebugString("Could't set the sound buffer position.\n");
 		return false;
 	}
 
@@ -370,10 +372,10 @@ void MoviePlayer::Update()
 	}
 
 #ifdef USE_FULLSCREEN
-	hr = m_pDDSFront->Flip(NULL, 0);
+	hr = m_pDDSFront->Flip(NULL, DDFLIP_WAIT);
 	if (FAILED(hr))
 	{
-		OutputDebugString("Flip failed\n");
+		OutputDebugString("Flip failed.\n");
 	}
 #else
 	POINT point;
@@ -393,7 +395,7 @@ void MoviePlayer::Update()
 	hr = m_pDDSFront->Blt(&viewRect, m_pDDSBack, &m_MovieRect, DDBLT_WAIT, NULL);
 	if (FAILED(hr))
 	{
-		OutputDebugString("Blt failed\n");
+		OutputDebugString("Blt failed.\n");
 	}
 #endif
 }
