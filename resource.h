@@ -2,9 +2,10 @@
 // Microsoft Visual C++ generated include file.
 // Used by EscapeArtist.rc
 //
-#define IDI_PAUSE_ICON                  101
-#define IDI_PLAY_ICON                   102
-#define IDI_STOP_ICON                   103
+#define IDI_ESCAPE_ICON                 101
+#define IDI_PAUSE_ICON                  102
+#define IDI_PLAY_ICON                   103
+#define IDI_STOP_ICON                   104
 
 // Next default values for new objects
 // 

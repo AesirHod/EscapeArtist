@@ -3,6 +3,7 @@
 
 //#define USE_FULLSCREEN
 //#define FILL_WITH_WHITE
+//#define DEBUG_ENUMERATE_DEVICES
 
 int SamplesPerSound = 44100; // 48000
 int SoundBufferLength = 44100 / 10;
@@ -17,10 +18,14 @@ MoviePlayer::MoviePlayer(HWND hWnd, HINSTANCE hInstance)
 
 	ZeroMemory(m_szFilename, sizeof(m_szFilename));
 
+	ZeroMemory(m_Devices, sizeof(m_Devices));
+	m_NumDevices = 0;
+
 	m_pDD = NULL;
 	m_pDD4 = NULL;
 	m_pDDSFront=NULL;
 	m_pDDSBack=NULL;
+	m_pDDSStretch = NULL;
 	m_pDDClipper = NULL;
 
 	m_pDS = NULL;
@@ -49,7 +54,15 @@ bool MoviePlayer::Initialize()
 
 	CoInitialize(NULL);
 
-	hr = DirectDrawCreate(NULL, &m_pDD, NULL);
+	GUID* pGuid = NULL;
+#if defined DEBUG_ENUMERATE_DEVICES
+	DirectDrawEnumerateEx(DDEnumCallbackEx, this, DDENUM_ATTACHEDSECONDARYDEVICES | DDENUM_DETACHEDSECONDARYDEVICES | DDENUM_NONDISPLAYDEVICES);
+	pGuid = &m_Devices[1].m_Guid;
+#elif defined USE_FULLSCREEN
+	pGuid = reinterpret_cast<GUID*>(DDCREATE_EMULATIONONLY);
+#endif
+
+	hr = DirectDrawCreate(pGuid, &m_pDD, NULL);
 	if (FAILED(hr))
 	{
 		OutputDebugString("Couldn't create the IDirectDraw object.\n");
@@ -64,15 +77,15 @@ bool MoviePlayer::Initialize()
 	}
 
 #ifdef USE_FULLSCREEN
-	hr = m_pDD4->SetCooperativeLevel(GetDesktopWindow(), DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
-	if (hr != DD_OK)
+	hr = m_pDD4->SetCooperativeLevel(GetDesktopWindow(), DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN | DDSCL_ALLOWREBOOT);
+	if (FAILED(hr))
 	{
 		OutputDebugString("Couldn't set the cooperative level.\n");
 		return false;
 	}
 
-	hr = m_pDD4->SetDisplayMode(800, 600, 32, 0, 0);
-	if (hr != DD_OK)
+	hr = m_pDD4->SetDisplayMode(1024, 768, 32, 0, 0);
+	if (FAILED(hr))
 	{
 		OutputDebugString("Couldn't set the correct display mode.\n");
 		return false;
@@ -99,9 +112,31 @@ bool MoviePlayer::Initialize()
 		OutputDebugString("Couldn't get the back surface.\n");
 		return false;
 	}
+
+	hr = m_pDDSFront->GetSurfaceDesc(&ddsd);
+	if (FAILED(hr))
+	{
+		OutputDebugString("Couldn't get the surface description.\n");
+		return false;
+	}
+
+	ZeroMemory(&ddsd2, sizeof(ddsd2));
+	ddsd2.dwSize = sizeof(ddsd2);
+	ddsd2.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
+	ddsd2.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
+	ddsd2.dwHeight = ddsd.dwHeight;
+	ddsd2.dwWidth = ddsd.dwWidth;
+	ddsd2.ddpfPixelFormat = ddsd.ddpfPixelFormat;
+
+	hr = m_pDD4->CreateSurface(&ddsd2, &m_pDDSStretch, NULL);
+	if (FAILED(hr))
+	{
+		OutputDebugString("Couldn't create the stretch surface.\n");
+		return false;
+	}
 #else
 	hr = m_pDD4->SetCooperativeLevel(GetDesktopWindow(), DDSCL_NORMAL);
-	if (hr != DD_OK)
+	if (FAILED(hr))
 	{
 		OutputDebugString("Couldn't set the cooperative level.\n");
 		return false;
@@ -179,7 +214,7 @@ bool MoviePlayer::Initialize()
 	DSBUFFERDESC dsbd;
 	ZeroMemory(&dsbd, sizeof(DSBUFFERDESC));
 	dsbd.dwSize = sizeof(DSBUFFERDESC);
-	dsbd.dwFlags = DSBCAPS_PRIMARYBUFFER;;
+	dsbd.dwFlags = DSBCAPS_PRIMARYBUFFER;
 	hr = m_pDS->CreateSoundBuffer(&dsbd, &m_pDSBPrimary, NULL);
 	if (FAILED(hr))
 	{
@@ -248,14 +283,22 @@ void MoviePlayer::Shutdown()
 		m_pDS = NULL;
 	}
 
+	if (m_pDDSStretch != NULL)
+	{
+		m_pDDSStretch->Release();
+		m_pDDSStretch = NULL;
+	}
+
 	if (m_pDDSBack != NULL)
 	{
 		m_pDDSBack->Release();
+		m_pDDSBack = NULL;
 	}
 
 	if (m_pDDSFront != NULL)
 	{
 		m_pDDSFront->Release();
+		m_pDDSFront = NULL;
 	}
 
 	if (m_pDDClipper != NULL)
@@ -318,7 +361,9 @@ bool MoviePlayer::LoadMovie()
 	DSBUFFERDESC dsbd;
 	ZeroMemory(&dsbd, sizeof(DSBUFFERDESC));
 	dsbd.dwSize = sizeof(DSBUFFERDESC);
-	dsbd.dwFlags = DSBCAPS_GETCURRENTPOSITION2;
+#ifdef USE_FULLSCREEN
+	dsbd.dwFlags = DSBCAPS_GLOBALFOCUS | DSBCAPS_GETCURRENTPOSITION2;
+#endif
 	dsbd.dwBufferBytes = wfx.nBlockAlign * SoundBufferLength;
 	dsbd.lpwfxFormat = &wfx;
 
@@ -372,6 +417,12 @@ void MoviePlayer::Update()
 	}
 
 #ifdef USE_FULLSCREEN
+	hr = m_pDDSBack->Blt(NULL, m_pDDSStretch, &m_MovieRect, DDBLT_WAIT, NULL);
+	if (FAILED(hr))
+	{
+		OutputDebugString("Blt failed.\n");
+	}
+
 	hr = m_pDDSFront->Flip(NULL, DDFLIP_WAIT);
 	if (FAILED(hr))
 	{
@@ -415,7 +466,11 @@ void MoviePlayer::UpdateVideo()
 
 	if (m_Codec.video.rgba)
 	{
+#ifdef USE_FULLSCREEN
+		IDirectDrawSurface4* pDestSurface = m_pDDSStretch;
+#else
 		IDirectDrawSurface4* pDestSurface = m_pDDSBack;
+#endif
 
 		DDSURFACEDESC2 ddsd;
 		ZeroMemory(&ddsd, sizeof(ddsd));
@@ -633,4 +688,22 @@ void MoviePlayer::Stop()
 		Update();
 		m_bPaused = false;
 	}
+}
+
+BOOL WINAPI MoviePlayer::DDEnumCallbackEx(GUID FAR* lpGUID, LPSTR lpDriverDescription, LPSTR lpDriverName, LPVOID lpContext, HMONITOR hm)
+{
+	MoviePlayer* pThis = (MoviePlayer*)lpContext;
+	DDDevice& device = pThis->m_Devices[pThis->m_NumDevices];
+
+	if (lpGUID != NULL)
+	{
+		memcpy(&device.m_Guid, lpGUID, sizeof(device.m_Guid));
+	}
+
+	strncpy(device.m_szName, lpDriverDescription, sizeof(device.m_szName));
+
+	device.m_IsHardware = false;
+	pThis->m_NumDevices++;
+
+	return pThis->m_NumDevices < 5 ? TRUE : FALSE;
 }

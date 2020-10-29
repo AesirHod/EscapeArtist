@@ -68,7 +68,7 @@ HWND InitWindow(int iCmdShow)
 	wcMainClass.cbClsExtra = 0;
 	wcMainClass.cbWndExtra = 0;
 	wcMainClass.hInstance = g_hInst;
-	wcMainClass.hIcon = LoadIcon(g_hInst, IDI_APPLICATION);
+	wcMainClass.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_ESCAPE_ICON));
 	wcMainClass.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wcMainClass.hbrBackground = GetSysColorBrush(COLOR_APPWORKSPACE);
 	wcMainClass.lpszMenuName = TEXT("");
@@ -214,7 +214,7 @@ LRESULT CALLBACK WndProcMain(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			PostQuitMessage(0);
 			return 0;
 		}
-/*		case WM_ACTIVATE:
+		case WM_ACTIVATE:
 		{
 			if (LOWORD(wParam) == WA_INACTIVE)
 			{
@@ -250,7 +250,7 @@ LRESULT CALLBACK WndProcMain(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			}
 
 			break;
-		}*/
+		}
 		case WM_COMMAND:
 		{
 			switch ((HIWORD(wParam)))

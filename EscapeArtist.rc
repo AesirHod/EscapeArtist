@@ -52,6 +52,8 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
+IDI_ESCAPE_ICON         ICON                    "EscapeIcon.ico"
+
 IDI_PAUSE_ICON          ICON                    "PauseIcon.ico"
 
 IDI_PLAY_ICON           ICON                    "PlayIcon.ico"

@@ -169,6 +169,7 @@
     <ResourceCompile Include="EscapeArtist.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="EscapeIcon.ico" />
     <Image Include="PauseIcon.ico" />
     <Image Include="PlayIcon.ico" />
     <Image Include="StopIcon.ico" />
