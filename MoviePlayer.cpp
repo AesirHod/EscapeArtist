@@ -8,13 +8,16 @@
 int SamplesPerSound = 44100; // 48000
 int SoundBufferLength = 44100 / 10;
 
-MoviePlayer::MoviePlayer(HWND hWnd, HINSTANCE hInstance)
+MoviePlayer::MoviePlayer(HWND hAppWnd, HWND hViewWnd, HINSTANCE hInstance)
 {
-	m_hWnd = hWnd;
+	m_hAppWnd = hAppWnd;
+	m_hViewWnd = hViewWnd;
 
 	m_bInitialized = false;
 	m_bMovieLoaded = false;
 	m_bPaused = false;
+	m_IsVideoFinished = false;
+	m_IsAudioFinished = false;
 
 	ZeroMemory(m_szFilename, sizeof(m_szFilename));
 
@@ -23,8 +26,8 @@ MoviePlayer::MoviePlayer(HWND hWnd, HINSTANCE hInstance)
 
 	m_pDD = NULL;
 	m_pDD4 = NULL;
-	m_pDDSFront=NULL;
-	m_pDDSBack=NULL;
+	m_pDDSFront= NULL;
+	m_pDDSBack= NULL;
 	m_pDDSStretch = NULL;
 	m_pDDClipper = NULL;
 
@@ -52,14 +55,19 @@ bool MoviePlayer::Initialize()
 	HRESULT hr = NOERROR;
 	DDSURFACEDESC2 ddsd, ddsd2;
 
-	CoInitialize(NULL);
+	hr = CoInitialize(NULL);
+	if (FAILED(hr))
+	{
+		OutputDebugString("Couldn't initialize COM.\n");
+		return false;
+	}
 
 	GUID* pGuid = NULL;
 #if defined DEBUG_ENUMERATE_DEVICES
 	DirectDrawEnumerateEx(DDEnumCallbackEx, this, DDENUM_ATTACHEDSECONDARYDEVICES | DDENUM_DETACHEDSECONDARYDEVICES | DDENUM_NONDISPLAYDEVICES);
 	pGuid = &m_Devices[1].m_Guid;
 #elif defined USE_FULLSCREEN
-	pGuid = reinterpret_cast<GUID*>(DDCREATE_EMULATIONONLY);
+	//pGuid = reinterpret_cast<GUID*>(DDCREATE_EMULATIONONLY);
 #endif
 
 	hr = DirectDrawCreate(pGuid, &m_pDD, NULL);
@@ -77,7 +85,7 @@ bool MoviePlayer::Initialize()
 	}
 
 #ifdef USE_FULLSCREEN
-	hr = m_pDD4->SetCooperativeLevel(GetDesktopWindow(), DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN | DDSCL_ALLOWREBOOT);
+	hr = m_pDD4->SetCooperativeLevel(m_hAppWnd, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN | DDSCL_ALLOWREBOOT);
 	if (FAILED(hr))
 	{
 		OutputDebugString("Couldn't set the cooperative level.\n");
@@ -135,7 +143,8 @@ bool MoviePlayer::Initialize()
 		return false;
 	}
 #else
-	hr = m_pDD4->SetCooperativeLevel(GetDesktopWindow(), DDSCL_NORMAL);
+	// Is this needed?
+	hr = m_pDD4->SetCooperativeLevel(m_hViewWnd, DDSCL_NORMAL);
 	if (FAILED(hr))
 	{
 		OutputDebugString("Couldn't set the cooperative level.\n");
@@ -189,7 +198,7 @@ bool MoviePlayer::Initialize()
 		return false;
 	}
 
-	hr = m_pDDClipper->SetHWnd(0, m_hWnd);
+	hr = m_pDDClipper->SetHWnd(0, m_hViewWnd);
 	if(FAILED(hr))
 	{
 		OutputDebugString("Couldn't set the hWnd.\n");
@@ -204,7 +213,7 @@ bool MoviePlayer::Initialize()
 		return false;
 	}
 
-	m_pDS->SetCooperativeLevel(m_hWnd, DSSCL_PRIORITY);
+	m_pDS->SetCooperativeLevel(m_hViewWnd, DSSCL_PRIORITY);
 	if (FAILED(hr))
 	{
 		OutputDebugString("Couldn't set the cooperative level.\n");
@@ -249,16 +258,25 @@ void MoviePlayer::Shutdown()
 	HRESULT hr;
 
 	m_bInitialized = false;
+	m_bMovieLoaded = false;
+	m_bPaused = false;
+	m_IsVideoFinished = false;
+	m_IsAudioFinished = false;
 	
 	if (m_pDD4 != NULL)
 	{
+#ifdef USE_FULLSCREEN
 		hr = m_pDD4->RestoreDisplayMode();
-		hr = m_pDD4->SetCooperativeLevel(GetDesktopWindow(), DDSCL_NORMAL);
+		hr = m_pDD4->SetCooperativeLevel(m_hAppWnd, DDSCL_NORMAL);
+#else
+		// Is this needed?
+		hr = m_pDD4->SetCooperativeLevel(m_hViewWnd, DDSCL_NORMAL);
+#endif
 	}
 
 	if (m_pDS != NULL)
 	{
-		hr = m_pDS->SetCooperativeLevel(m_hWnd, DSSCL_NORMAL);
+		hr = m_pDS->SetCooperativeLevel(m_hViewWnd, DSSCL_NORMAL);
 	}
 
 	CoUninitialize();
@@ -344,7 +362,10 @@ bool MoviePlayer::LoadMovie()
 
 	m_RunningSampleIndex = 0;
 
-	codec_decode_video(&m_Codec);
+	if (codec_decode_video(&m_Codec) == false)
+	{
+		m_IsVideoFinished = true;
+	}
 
 	// Apparently, this doesn't need to be the same as the primary buffer.
 	// See https://docs.microsoft.com/en-us/previous-versions/windows/desktop/bb318673(v=vs.85)
@@ -362,7 +383,7 @@ bool MoviePlayer::LoadMovie()
 	ZeroMemory(&dsbd, sizeof(DSBUFFERDESC));
 	dsbd.dwSize = sizeof(DSBUFFERDESC);
 #ifdef USE_FULLSCREEN
-	dsbd.dwFlags = DSBCAPS_GLOBALFOCUS | DSBCAPS_GETCURRENTPOSITION2;
+	dsbd.dwFlags = DSBCAPS_GLOBALFOCUS; // | DSBCAPS_GETCURRENTPOSITION2;
 #endif
 	dsbd.dwBufferBytes = wfx.nBlockAlign * SoundBufferLength;
 	dsbd.lpwfxFormat = &wfx;
@@ -401,6 +422,12 @@ void MoviePlayer::Update()
 		return;
 	}
 
+	if (m_IsVideoFinished && m_IsAudioFinished)
+	{
+		Shutdown();
+		return;
+	}
+
 	if (!m_bPaused)
 	{
 		ULONGLONG currentTime = GetPerformanceCounter();
@@ -431,15 +458,15 @@ void MoviePlayer::Update()
 #else
 	POINT point;
 	RECT viewRect;
-	GetClientRect(m_hWnd, &viewRect);
+	GetClientRect(m_hViewWnd, &viewRect);
 	point.x = viewRect.top;
 	point.y = viewRect.left;
-	ClientToScreen(m_hWnd, &point);
+	ClientToScreen(m_hViewWnd, &point);
 	viewRect.left = point.x;
 	viewRect.top = point.y;
 	point.x = viewRect.right;
 	point.y = viewRect.bottom;
-	ClientToScreen(m_hWnd, &point);
+	ClientToScreen(m_hViewWnd, &point);
 	viewRect.right = point.x;
 	viewRect.bottom = point.y;
 
@@ -455,16 +482,18 @@ void MoviePlayer::UpdateVideo()
 {
 	HRESULT hr;
 
-	bool isVideoPlaying = false;
 	ULONGLONG frame = m_Codec.frame;
 	codec_inc_time(&m_Codec, m_DeltaTime);
 	while (frame < m_Codec.frame)
 	{
 		frame++;
-		isVideoPlaying = (codec_decode_video(&m_Codec)) ? true : false;
+		if (codec_decode_video(&m_Codec) == false)
+		{
+			m_IsVideoFinished = true;
+		}
 	}
 
-	if (m_Codec.video.rgba)
+	if (!m_IsVideoFinished && m_Codec.video.rgba)
 	{
 #ifdef USE_FULLSCREEN
 		IDirectDrawSurface4* pDestSurface = m_pDDSStretch;
@@ -597,7 +626,11 @@ void MoviePlayer::StreamAudio(void* region, DWORD regionSize)
 	{
 		if (m_AudioReadPosition == nullptr || m_AudioReadPosition >= (m_Codec.audio.buff + m_Codec.audio.buff_size))
 		{
-			codec_decode_audio(&m_Codec);
+			if (codec_decode_audio(&m_Codec) == false)
+			{
+				m_IsAudioFinished = true;
+			}
+
 			m_AudioReadPosition = m_Codec.audio.buff;
 		}
 

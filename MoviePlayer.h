@@ -18,11 +18,14 @@ class MoviePlayer
 {
 protected:
 
-	HWND m_hWnd;
+	HWND m_hAppWnd;
+	HWND m_hViewWnd;
 
 	bool m_bInitialized;
 	bool m_bMovieLoaded;
 	bool m_bPaused;
+	bool m_IsVideoFinished;
+	bool m_IsAudioFinished;
 
 	char m_szFilename[MAX_PATH];
 
@@ -61,7 +64,7 @@ protected:
 
 public:
 
-	MoviePlayer(HWND hWnd, HINSTANCE hInstance);
+	MoviePlayer(HWND hAppWnd, HWND hViewWnd, HINSTANCE hInstance);
 	virtual ~MoviePlayer();
 
 	void OpenFile(const char* szFileName);

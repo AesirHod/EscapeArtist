@@ -88,13 +88,16 @@ HWND InitWindow(int iCmdShow)
 	wxViewClass.lpszClassName = TEXT("DDView");
 	RegisterClass(&wxViewClass);
 
+	int width = 640;
+	int height = 520;
+
 	HWND hMainWnd = CreateWindowEx(
 		0,
 		TEXT("EscapeArtist"),
 		TEXT("EscapeArtist"),
 		WS_OVERLAPPEDWINDOW, // WS_POPUP,
-		GetSystemMetrics(SM_CXSCREEN) / 2,
-		0, //GetSystemMetrics(SM_CYSCREEN) / 2,
+		(GetSystemMetrics(SM_CXSCREEN) / 2) - (width / 2),
+		0, //(GetSystemMetrics(SM_CYSCREEN) / 2) - (height / 2),
 		640, //GetSystemMetrics(SM_CXSCREEN) / 3,
 		520, //GetSystemMetrics(SM_CYSCREEN) / 3,
 		NULL,
@@ -347,7 +350,8 @@ LRESULT CALLBACK WndProcView(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	{
 		case WM_CREATE:
 		{
-			g_MovieView = new MoviePlayer(hWnd, g_hInst);
+			//g_MovieView = new MoviePlayer(GetDesktopWindow(), hWnd, g_hInst);
+			g_MovieView = new MoviePlayer(GetParent(hWnd), hWnd, g_hInst);
 			break;
 		}
 		case WM_DESTROY:
