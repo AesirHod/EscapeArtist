@@ -5,6 +5,10 @@
 
 #include "TinyCodec/tiny_codec.h"
 
+//#define USE_FULLSCREEN
+//#define FILL_WITH_WHITE
+//#define DEBUG_ENUMERATE_DEVICES
+
 struct DDDevice
 {
 	DDDevice* pNext;
@@ -19,6 +23,14 @@ class MoviePlayer
 protected:
 
 	HWND m_hAppWnd;
+#ifdef USE_FULLSCREEN
+	HMENU m_hMenu;
+	int m_AppWndX;
+	int m_AppWndY;
+	int m_AppWndW;
+	int m_AppWndH;
+#endif
+
 	HWND m_hViewWnd;
 
 	bool m_bInitialized;

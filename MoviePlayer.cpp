@@ -1,10 +1,6 @@
 #include "MoviePlayer.h"
 #include <time.h>
 
-//#define USE_FULLSCREEN
-//#define FILL_WITH_WHITE
-//#define DEBUG_ENUMERATE_DEVICES
-
 int SamplesPerSound = 44100; // 48000
 int SoundBufferLength = 44100 / 10;
 
@@ -52,6 +48,22 @@ MoviePlayer::~MoviePlayer()
 
 bool MoviePlayer::Initialize()
 {
+#ifdef USE_FULLSCREEN
+	m_hMenu = GetMenu(m_hAppWnd);
+	SetMenu(m_hAppWnd, NULL);
+
+	RECT rect;
+	GetWindowRect(m_hAppWnd, &rect);
+	m_AppWndX = rect.left;
+	m_AppWndY = rect.top;
+	m_AppWndW = rect.right - rect.left;
+	m_AppWndH = rect.bottom - rect.top;
+
+	SetWindowLongPtr(m_hAppWnd, GWL_STYLE, WS_POPUP);
+	SetWindowPos(m_hAppWnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+	ShowWindow(m_hAppWnd, TRUE);
+#endif
+
 	HRESULT hr = NOERROR;
 	DDSURFACEDESC2 ddsd, ddsd2;
 
@@ -336,6 +348,13 @@ void MoviePlayer::Shutdown()
 		m_pDD->Release();
 		m_pDD = NULL;
 	}
+
+#ifdef USE_FULLSCREEN
+	SetMenu(m_hAppWnd, m_hMenu);
+	SetWindowLongPtr(m_hAppWnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+	SetWindowPos(m_hAppWnd, 0, m_AppWndX, m_AppWndY, m_AppWndW, m_AppWndH, /*SWP_NOMOVE | SWP_NOSIZE |*/ SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+	ShowWindow(m_hAppWnd, TRUE);
+#endif
 }
 
 bool MoviePlayer::LoadMovie()
